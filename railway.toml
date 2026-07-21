@@ -1,9 +1,10 @@
-# ── Primary service: Aviator Game (frontend) ──────────────────────────────────
+# ── Primary service: Aviator Game + API (combined) ────────────────────────────
 # Railway picks this up automatically when you connect the repo.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+startCommand = "node --enable-source-maps ./dist/index.mjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
