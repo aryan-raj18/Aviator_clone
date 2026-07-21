@@ -3,17 +3,27 @@ FROM node:24-slim AS builder
 
 WORKDIR /app
 
-# Enable corepack so pnpm is available without a separate install step
-RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
+# Install pnpm
+RUN npm install -g pnpm@10.26.1
 
-# Copy workspace-level files needed for pnpm to resolve the monorepo
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY tsconfig.json tsconfig.base.json ./
+# Copy workspace root files (pnpm-workspace.yaml kept intact so catalog: entries survive)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 
-# Copy only the artifact we are deploying (no other artifacts needed)
+# Patch pnpm-workspace.yaml: keep catalog/overrides/settings but restrict
+# the packages list to ONLY the game. Without this, pnpm tries to find
+# lib/*, artifacts/api-server, scripts/ — none of which exist in this image.
+RUN node -e "\
+const fs = require('fs');\
+let c = fs.readFileSync('pnpm-workspace.yaml', 'utf8');\
+c = c.replace(/^packages:\\n(?:  - .*\\n)*/m, 'packages:\\n  - \"artifacts/aviator-game\"\\n');\
+fs.writeFileSync('pnpm-workspace.yaml', c);\
+console.log('packages section patched');\
+"
+
+# Copy only the artifact we are deploying
 COPY artifacts/aviator-game/ ./artifacts/aviator-game/
 
-# Install dependencies (frozen so the build is reproducible)
+# Install — frozen lockfile works because we kept the full catalog
 RUN pnpm install --frozen-lockfile
 
 # Build → output lands in artifacts/aviator-game/dist/public
@@ -25,12 +35,11 @@ FROM node:24-slim
 
 WORKDIR /app
 
-# `serve` is a tiny static-file server that honours the PORT env var Railway injects
+# serve@14 is a tiny static-file server; it reads PORT from the environment
+# which Railway injects automatically at runtime
 RUN npm install -g serve@14
 
-# Copy only the compiled static assets from the builder stage
 COPY --from=builder /app/artifacts/aviator-game/dist/public ./public
 
-# Railway injects PORT at runtime; serve reads it automatically
 EXPOSE 3000
 CMD ["sh", "-c", "serve -s ./public -l ${PORT:-3000}"]
