@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+:root {
+  --background: 230 50% 6%;
+  --foreground: 0 0% 100%;
+  --border: 230 30% 15%;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .pulse-cashout { animation: pulse-bet 0.4s ease-in-out infinite; }
+  .badge-new { animation: badge-new 0.3s ease-out forwards; }
+}
+
+@keyframes pulse-bet {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249,115,22,0.7); }
+  50% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(249,115,22,0); }
+}
+
+@keyframes badge-new {
+  0% { transform: scale(1.15); box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+  100% { transform: scale(1); box-shadow: 0 0 0px rgba(255,255,255,0); }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
