@@ -58,11 +58,13 @@ FROM node:24-slim
 
 WORKDIR /app
 
-# API server bundle (esbuild fully bundles — no node_modules needed at runtime)
-COPY --from=api-builder  /app/artifacts/api-server/dist/ ./dist/
+# Preserve the exact build path so pino worker file references resolve correctly.
+# esbuild-plugin-pino bakes the absolute build-time path into the worker require()
+# call; if we flatten the dir the worker can't be found at runtime.
+COPY --from=api-builder  /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/
 
 # Frontend static files served by Express
 COPY --from=frontend-builder /app/artifacts/aviator-game/dist/public/ ./public/
 
 EXPOSE 3000
-CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
+CMD ["node", "--enable-source-maps", "./artifacts/api-server/dist/index.mjs"]
