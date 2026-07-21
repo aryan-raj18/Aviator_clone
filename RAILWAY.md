@@ -1,58 +1,70 @@
 # Railway Deployment Guide
 
-This repo has **3 deployable services**. Each has its own Dockerfile at the root.
-
-| Service | Dockerfile | What it is |
-|---|---|---|
-| Aviator Game | `Dockerfile` | The game frontend (React) |
-| API Server | `Dockerfile.api-server` | The backend Express API |
-| Mockup Sandbox | `Dockerfile.mockup-sandbox` | Component preview tool |
+This repo deploys as a **single Railway service** — the Express API server also serves
+the Aviator Game frontend as static files. One Dockerfile, one service to configure.
 
 ---
 
-## Step 1 — Connect the repo (first time only)
+## Deploy in 3 steps
+
+### Step 1 — Connect the repo
 
 1. Open [Railway](https://railway.app) → **New Project**
 2. Click **Deploy from GitHub repo** → select this repo
-3. Railway creates the **Aviator Game** service automatically (it reads `railway.toml` + `Dockerfile`)
+3. Railway auto-detects `railway.toml` and uses `Dockerfile` — no extra config needed
+
+### Step 2 — Set environment variables
+
+In the service's **Variables** tab, add:
+
+| Variable | Required? | Description |
+|---|---|---|
+| `DATABASE_URL` | Only if you use the DB | Postgres connection string. Railway can provision one: **+ New → Database → PostgreSQL**, then link it. |
+| `PORT` | No | Auto-injected by Railway |
+
+> The server starts and serves the game without `DATABASE_URL`. You only need it once
+> you add routes that query the database.
+
+### Step 3 — Deploy
+
+Click **Deploy**. Railway builds the Dockerfile (builds frontend + API, runs the server).
+The game will be live at your Railway service URL.
 
 ---
 
-## Step 2 — Add the API Server service
+## How it works
 
-1. In your Railway project, click **+ New** → **GitHub Repo** → same repo
-2. Railway shows a settings panel — click **Configure**
-3. Set **Dockerfile Path** → `Dockerfile.api-server`
-4. Click **Deploy**
+```
+Dockerfile (multi-stage)
+  Stage 1 → builds React/Vite frontend  →  dist/public/
+  Stage 2 → builds Express API server   →  dist/index.mjs
+  Stage 3 → copies both, runs Express
 
-> **Required env var:** Add `DATABASE_URL` in the service's **Variables** tab (your Postgres connection string).
-
----
-
-## Step 3 — Add the Mockup Sandbox service
-
-1. Click **+ New** → **GitHub Repo** → same repo again
-2. Set **Dockerfile Path** → `Dockerfile.mockup-sandbox`
-3. Click **Deploy**
+Express (runtime)
+  /api/*   →  API routes
+  /*       →  serves React SPA (index.html fallback for client-side routing)
+```
 
 ---
 
-## Step 4 — Remove the broken auto-detected services
+## Other Dockerfiles (advanced / separate-service setup)
 
-Railway may have auto-created services named `@workspace/api-spec` and `@workspace/api-client`.  
-These are internal library packages — **not deployable**. Delete them:
+The repo also contains individual Dockerfiles if you prefer to run services separately:
 
-1. Click the service → **Settings** → scroll to bottom → **Delete Service**
+| File | What it deploys |
+|---|---|
+| `artifacts/api-server/Dockerfile` | API server only |
+| `artifacts/mockup-sandbox/Dockerfile` | Component preview tool |
+
+For separate services, create additional Railway services pointing to those Dockerfiles
+and set `DATABASE_URL` on the API server service.
 
 ---
 
-## Environment Variables
+## Local development
 
-| Service | Variable | Required? | Description |
-|---|---|---|---|
-| API Server | `DATABASE_URL` | Yes | Postgres connection string |
-| API Server | `PORT` | No | Auto-injected by Railway |
-| Aviator Game | `PORT` | No | Auto-injected by Railway |
-| Mockup Sandbox | `PORT` | No | Auto-injected by Railway |
-
-All services read `PORT` automatically from Railway — no manual setting needed.
+```bash
+pnpm install
+pnpm --filter @workspace/api-server run dev   # API on :8080
+pnpm --filter @workspace/aviator-game run dev  # Game on :21308
+```

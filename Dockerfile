@@ -1,45 +1,68 @@
-# ── Stage 1: build ────────────────────────────────────────────────────────────
-FROM node:24-slim AS builder
+# Combined: Aviator Game (frontend) + API Server — one container, one Railway service.
+#
+# The API server (Express) serves the built React app as static files and
+# handles /api/* routes. PORT is auto-injected by Railway at runtime.
+
+# ── Stage 1: build frontend ────────────────────────────────────────────────────
+FROM node:24-slim AS frontend-builder
 
 WORKDIR /app
 
-# Install pnpm
 RUN npm install -g pnpm@10.26.1
 
-# Copy workspace root files (pnpm-workspace.yaml kept intact so catalog: entries survive)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 
-# Patch pnpm-workspace.yaml: keep catalog/overrides/settings but restrict
-# the packages list to ONLY the game. Without this, pnpm tries to find
-# lib/*, artifacts/api-server, scripts/ — none of which exist in this image.
+# Restrict workspace to only the frontend so pnpm doesn't look for missing packages.
 RUN node -e "\
 const fs = require('fs');\
 let c = fs.readFileSync('pnpm-workspace.yaml', 'utf8');\
-c = c.replace(/^packages:\\n(?:  - .*\\n)*/m, 'packages:\\n  - \"artifacts/aviator-game\"\\n');\
+c = c.replace(/^packages:\n(?:  - .*\n)*/m, 'packages:\n  - \"artifacts/aviator-game\"\n');\
 fs.writeFileSync('pnpm-workspace.yaml', c);\
-console.log('packages section patched');\
 "
 
-# Copy only the artifact we are deploying
 COPY artifacts/aviator-game/ ./artifacts/aviator-game/
 
-# Install — frozen lockfile works because we kept the full catalog
 RUN pnpm install --frozen-lockfile
 
-# Build → output lands in artifacts/aviator-game/dist/public
 ENV NODE_ENV=production
 RUN pnpm --filter @workspace/aviator-game run build
 
-# ── Stage 2: serve ────────────────────────────────────────────────────────────
+# ── Stage 2: build API server ──────────────────────────────────────────────────
+FROM node:24-slim AS api-builder
+
+WORKDIR /app
+
+RUN npm install -g pnpm@10.26.1
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+
+# Restrict workspace to api-server + the lib packages it depends on.
+RUN node -e "\
+const fs = require('fs');\
+let c = fs.readFileSync('pnpm-workspace.yaml', 'utf8');\
+c = c.replace(/^packages:\n(?:  - .*\n)*/m,\
+  'packages:\n  - \"artifacts/api-server\"\n  - \"lib/api-zod\"\n  - \"lib/db\"\n');\
+fs.writeFileSync('pnpm-workspace.yaml', c);\
+"
+
+COPY lib/api-zod/ ./lib/api-zod/
+COPY lib/db/      ./lib/db/
+COPY artifacts/api-server/ ./artifacts/api-server/
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm --filter @workspace/api-server run build
+
+# ── Stage 3: run ───────────────────────────────────────────────────────────────
 FROM node:24-slim
 
 WORKDIR /app
 
-# serve@14 is a tiny static-file server; it reads PORT from the environment
-# which Railway injects automatically at runtime
-RUN npm install -g serve@14
+# API server bundle (esbuild fully bundles — no node_modules needed at runtime)
+COPY --from=api-builder  /app/artifacts/api-server/dist/ ./dist/
 
-COPY --from=builder /app/artifacts/aviator-game/dist/public ./public
+# Frontend static files served by Express
+COPY --from=frontend-builder /app/artifacts/aviator-game/dist/public/ ./public/
 
 EXPOSE 3000
-CMD ["sh", "-c", "serve -s ./public -l ${PORT:-3000}"]
+CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
