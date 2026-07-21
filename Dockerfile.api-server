@@ -1,0 +1,42 @@
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM node:24-slim AS builder
+
+WORKDIR /app
+
+RUN npm install -g pnpm@10.26.1
+
+# Copy workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+
+# Restrict workspace to only the packages needed for api-server.
+# lib/db and lib/api-zod are workspace deps that esbuild bundles in.
+RUN node -e "\
+const fs = require('fs');\
+let c = fs.readFileSync('pnpm-workspace.yaml', 'utf8');\
+c = c.replace(/^packages:\\n(?:  - .*\\n)*/m,\
+  'packages:\\n  - \"artifacts/api-server\"\\n  - \"lib/api-zod\"\\n  - \"lib/db\"\\n');\
+fs.writeFileSync('pnpm-workspace.yaml', c);\
+"
+
+# Copy lib sources (esbuild bundles them into the final dist)
+COPY lib/api-zod/ ./lib/api-zod/
+COPY lib/db/     ./lib/db/
+
+# Copy the artifact
+COPY artifacts/api-server/ ./artifacts/api-server/
+
+RUN pnpm install --frozen-lockfile
+
+# Build → esbuild bundles everything into artifacts/api-server/dist/
+RUN pnpm --filter @workspace/api-server run build
+
+# ── Stage 2: run ──────────────────────────────────────────────────────────────
+FROM node:24-slim
+
+WORKDIR /app
+
+# Copy only the compiled bundle; no node_modules needed (esbuild fully bundles)
+COPY --from=builder /app/artifacts/api-server/dist/ ./dist/
+
+EXPOSE 3000
+CMD ["node", "--enable-source-maps", "./dist/index.mjs"]

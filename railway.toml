@@ -1,3 +1,5 @@
+# ── Primary service: Aviator Game (frontend) ──────────────────────────────────
+# Railway picks this up automatically when you connect the repo.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
