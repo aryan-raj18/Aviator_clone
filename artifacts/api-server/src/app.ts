@@ -41,7 +41,7 @@ if (fs.existsSync(publicDir)) {
   app.use(express.static(publicDir));
 
   // SPA fallback: any non-API route returns index.html so client-side routing works.
-  app.get("*", (_req, res) => {
+  app.get("*splat", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
   });
 }
