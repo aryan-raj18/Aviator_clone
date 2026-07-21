@@ -30,9 +30,9 @@ FROM node:24-slim
 
 WORKDIR /app
 
-RUN npm install -g serve@14
-
 COPY --from=builder /app/artifacts/mockup-sandbox/dist/ ./public/
+# server.mjs: pure-Node SPA server — avoids Express 5 path-to-regexp '*' issue
+COPY artifacts/mockup-sandbox/server.mjs ./
 
 EXPOSE 3000
-CMD ["sh", "-c", "serve -s ./public -l ${PORT:-3000}"]
+CMD ["node", "server.mjs"]

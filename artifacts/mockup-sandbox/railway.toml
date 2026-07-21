@@ -3,6 +3,6 @@ builder = "DOCKERFILE"
 dockerfilePath = "artifacts/mockup-sandbox/Dockerfile"
 
 [deploy]
-startCommand = "serve -s ./public -l $PORT"
+startCommand = "node server.mjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
